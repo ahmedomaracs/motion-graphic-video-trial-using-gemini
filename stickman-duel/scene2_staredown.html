@@ -1,0 +1,198 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { margin: 0; overflow: hidden; background: #000; }
+    canvas { display: block; width: 1920px; height: 1080px; }
+  </style>
+</head>
+<body>
+<canvas id="c" width="1920" height="1080"></canvas>
+<script type="module">
+import {
+  clamp, lerp, easeOut, easeInOut, easeElastic,
+  drawStickman, drawSpeedLines, pseudoRandom
+} from './common.js';
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+window.film = {
+  duration: 4.0,
+  frame(t) {
+    ctx.clearRect(0, 0, 1920, 1080);
+
+    const shakeMag = t > 3.0 ? (4.0 - t) * 8 : (t > 2.0 ? 3 : 1);
+    const shakeX = (pseudoRandom(t * 50) - 0.5) * shakeMag;
+    const shakeY = (pseudoRandom(t * 50 + 1) - 0.5) * shakeMag;
+
+    ctx.save();
+    ctx.translate(shakeX, shakeY);
+
+    // 1. Backgrounds - Split diagonally
+    // Draw Blue Side (Bottom / Right)
+    ctx.save();
+    const blueGrad = ctx.createLinearGradient(960, 540, 1920, 1080);
+    blueGrad.addColorStop(0, '#041026');
+    blueGrad.addColorStop(1, '#001a40');
+    ctx.fillStyle = blueGrad;
+    ctx.fillRect(0, 0, 1920, 1080);
+
+    // Blue lightning streaks in background
+    ctx.strokeStyle = 'rgba(0, 220, 255, 0.4)';
+    ctx.lineWidth = 2.5;
+    for (let i = 0; i < 4; i++) {
+      ctx.beginPath();
+      let lx = 1400 + i * 120;
+      let ly = 100;
+      ctx.moveTo(lx, ly);
+      for (let s = 0; s < 5; s++) {
+        lx += (pseudoRandom(i * 10 + s + t * 20) - 0.5) * 60;
+        ly += 160;
+        ctx.lineTo(lx, ly);
+      }
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // Draw Red Side (Top / Left) using clipping path
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(1350, 0);
+    ctx.lineTo(570, 1080);
+    ctx.lineTo(0, 1080);
+    ctx.closePath();
+    ctx.clip();
+
+    const redGrad = ctx.createLinearGradient(0, 0, 960, 540);
+    redGrad.addColorStop(0, '#300508');
+    redGrad.addColorStop(1, '#500b12');
+    ctx.fillStyle = redGrad;
+    ctx.fillRect(0, 0, 1920, 1080);
+
+    // Rising fiery embers
+    ctx.fillStyle = 'rgba(255, 80, 20, 0.7)';
+    for (let i = 0; i < 25; i++) {
+      const ex = pseudoRandom(i * 12.3) * 1200;
+      const ey = 1080 - ((t * 220 + pseudoRandom(i * 7.1) * 1080) % 1080);
+      const er = 2 + pseudoRandom(i) * 5;
+      ctx.beginPath();
+      ctx.arc(ex, ey, er, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+
+    // 2. Center Dividing Energy Blade
+    ctx.save();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 6;
+    ctx.shadowColor = '#ffff00';
+    ctx.shadowBlur = 18;
+    ctx.beginPath();
+    ctx.moveTo(1350, 0);
+    ctx.lineTo(570, 1080);
+    ctx.stroke();
+
+    // Sparkles along the divider
+    for (let i = 0; i < 8; i++) {
+      const dt = (i / 8 + t * 1.5) % 1.0;
+      const dx = lerp(1350, 570, dt);
+      const dy = lerp(0, 1080, dt);
+      ctx.fillStyle = '#fffaaa';
+      ctx.beginPath();
+      ctx.arc(dx, dy, 4 + pseudoRandom(i + t * 10) * 6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+
+    // 3. Red Stickman Stance (Top-Left side)
+    const redAuraIntensity = 1.0 + Math.sin(t * 15) * 0.3;
+    drawStickman(ctx, {
+      x: 480,
+      y: 680,
+      scale: 1.4,
+      color: '#ff3344',
+      lineWidth: 9,
+      eyeType: 'angry',
+      eyeDir: 1,
+      torsoAngle: 0.25, // leaning aggressively forward
+      headband: { color: '#ff2233', flutter: Math.sin(t * 25) * 16 },
+      aura: { color: '#ff2200', intensity: redAuraIntensity, seed: t * 10 },
+      leftArm: [1.2, 0.8],   // clenched lead fist
+      rightArm: [-0.6, 1.4], // coiled rear punch ready
+      leftLeg: [0.6, -0.7],  // low front stance
+      rightLeg: [-0.7, 0.4], // braced back leg
+    });
+
+    // 4. Blue Stickman Stance (Bottom-Right side)
+    const blueAuraIntensity = 1.0 + Math.cos(t * 15) * 0.3;
+    drawStickman(ctx, {
+      x: 1440,
+      y: 720,
+      scale: 1.4,
+      color: '#00bbff',
+      lineWidth: 9,
+      eyeType: 'angry',
+      eyeDir: -1,
+      torsoAngle: -0.2, // focused defensive stance
+      scarf: { color: '#0099ee', flutter: Math.sin(t * 22) * 16 },
+      aura: { color: '#00ccff', intensity: blueAuraIntensity, seed: t * 10 + 5 },
+      leftArm: [-1.1, -0.6], // high palm block guard
+      rightArm: [0.7, -1.2], // spear hand ready
+      leftLeg: [-0.5, 0.4],
+      rightLeg: [0.7, -0.6],
+    });
+
+    // 5. Floating Ki Rocks / Debris
+    ctx.fillStyle = '#665566';
+    for (let r = 0; r < 14; r++) {
+      const rx = 200 + pseudoRandom(r * 33) * 1500;
+      const ry = 950 - ((t * 90 + pseudoRandom(r * 19) * 500) % 600);
+      ctx.beginPath();
+      ctx.arc(rx, ry, 4 + pseudoRandom(r) * 8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 6. Big Action Text Prompts
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    if (t >= 0.5 && t < 1.8) {
+      // READY...
+      ctx.fillStyle = '#ffcc00';
+      ctx.font = '900 85px Impact, Arial Black, sans-serif';
+      ctx.shadowColor = '#000000';
+      ctx.shadowBlur = 15;
+      ctx.fillText('READY...', 960, 220);
+    } else if (t >= 1.8 && t < 2.9) {
+      // SET...
+      ctx.fillStyle = '#ff5533';
+      ctx.font = '900 95px Impact, Arial Black, sans-serif';
+      ctx.shadowColor = '#000000';
+      ctx.shadowBlur = 20;
+      ctx.fillText('SET...', 960, 220);
+    } else if (t >= 2.9) {
+      // FIGHT!!!
+      const fightProgress = (t - 2.9) / 1.1;
+      const fScale = 1.0 + (1.0 - clamp(fightProgress * 3, 0, 1)) * 0.8;
+      ctx.translate(960, 220);
+      ctx.scale(fScale, fScale);
+      ctx.fillStyle = '#ffff00';
+      ctx.font = '900 120px Impact, Arial Black, sans-serif';
+      ctx.shadowColor = '#ff0000';
+      ctx.shadowBlur = 30;
+      ctx.fillText('FIGHT!!!', 0, 0);
+
+      // Speed lines on FIGHT!
+      drawSpeedLines(ctx, 0, 0, 1.0 - fightProgress, t * 10);
+    }
+    ctx.restore();
+
+    ctx.restore();
+  }
+};
+</script>
+</body>
+</html>

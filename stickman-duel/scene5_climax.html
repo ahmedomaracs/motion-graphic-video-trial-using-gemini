@@ -1,0 +1,287 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { margin: 0; overflow: hidden; background: #000; }
+    canvas { display: block; width: 1920px; height: 1080px; }
+  </style>
+</head>
+<body>
+<canvas id="c" width="1920" height="1080"></canvas>
+<script type="module">
+import {
+  clamp, lerp, easeOut, easeInOut, easeIn,
+  drawStickman, drawSpeedLines, pseudoRandom
+} from './common.js';
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+window.film = {
+  duration: 5.0,
+  frame(t) {
+    ctx.clearRect(0, 0, 1920, 1080);
+
+    // Screen Shake intensifies during beam struggle and peaks on explosion
+    let shake = 0;
+    if (t < 2.0) {
+      shake = (t / 2.0) * 6; // charging rumble
+    } else if (t < 4.0) {
+      shake = 12 + Math.sin(t * 40) * 8; // intense beam clash
+    } else {
+      shake = (1.0 - (t - 4.0) / 1.0) * 35; // colossal explosion
+    }
+    const sx = (pseudoRandom(t * 90) - 0.5) * shake;
+    const sy = (pseudoRandom(t * 90 + 1) - 0.5) * shake;
+
+    ctx.save();
+    ctx.translate(sx, sy);
+
+    // 1. Background
+    const bg = ctx.createLinearGradient(0, 0, 0, 1080);
+    bg.addColorStop(0, '#06020c');
+    bg.addColorStop(0.5, '#160824');
+    bg.addColorStop(1, '#020105');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, 1920, 1080);
+
+    // Arena Floor
+    ctx.fillStyle = '#0f0a17';
+    ctx.fillRect(0, 840, 1920, 240);
+
+    // 2. Charging Phase (0.0 to 2.0s)
+    if (t < 2.0) {
+      const chargeT = t / 2.0;
+      const orbRadius = chargeT * 70;
+
+      // Levitating rocks
+      ctx.fillStyle = '#554455';
+      for (let r = 0; r < 20; r++) {
+        const rx = 200 + pseudoRandom(r * 40) * 1520;
+        const ry = 840 - ((t * 120 + pseudoRandom(r * 15) * 500) % 500);
+        ctx.beginPath();
+        ctx.arc(rx, ry, 4 + pseudoRandom(r) * 10, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Red charging at x=400
+      drawStickman(ctx, {
+        x: 400,
+        y: 840,
+        scale: 1.2,
+        color: '#ff3344',
+        lineWidth: 8,
+        eyeType: 'angry',
+        eyeDir: 1,
+        torsoAngle: -0.3, // coiled back
+        headband: { color: '#ff2233', flutter: 30 },
+        aura: { color: '#ff2200', intensity: 1.0 + chargeT, seed: t * 20 },
+        leftArm: [-0.6, 1.4], // cupped hands at hip
+        rightArm: [-0.8, 1.4],
+        leftLeg: [0.6, -0.6],
+        rightLeg: [-0.7, 0.5],
+      });
+
+      // Red Fireball Gathering
+      ctx.save();
+      const redGrad = ctx.createRadialGradient(340, 750, 10, 340, 750, orbRadius + 30);
+      redGrad.addColorStop(0, '#ffffff');
+      redGrad.addColorStop(0.3, '#ffaa00');
+      redGrad.addColorStop(0.7, '#ff2200');
+      redGrad.addColorStop(1, 'rgba(255, 0, 0, 0)');
+      ctx.fillStyle = redGrad;
+      ctx.shadowColor = '#ff3300';
+      ctx.shadowBlur = 35;
+      ctx.beginPath();
+      ctx.arc(340, 750, orbRadius + 15, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      // Blue charging at x=1520
+      drawStickman(ctx, {
+        x: 1520,
+        y: 840,
+        scale: 1.2,
+        color: '#00bbff',
+        lineWidth: 8,
+        eyeType: 'angry',
+        eyeDir: -1,
+        torsoAngle: 0.3, // coiled back
+        scarf: { color: '#0099ee', flutter: 30 },
+        aura: { color: '#00ccff', intensity: 1.0 + chargeT, seed: t * 20 + 7 },
+        leftArm: [0.6, 1.4], // cupped hands at hip
+        rightArm: [0.8, 1.4],
+        leftLeg: [-0.6, 0.6],
+        rightLeg: [0.7, -0.5],
+      });
+
+      // Blue Lightning Orb Gathering
+      ctx.save();
+      const blueGrad = ctx.createRadialGradient(1580, 750, 10, 1580, 750, orbRadius + 30);
+      blueGrad.addColorStop(0, '#ffffff');
+      blueGrad.addColorStop(0.3, '#99ffff');
+      blueGrad.addColorStop(0.7, '#0088ff');
+      blueGrad.addColorStop(1, 'rgba(0, 136, 255, 0)');
+      ctx.fillStyle = blueGrad;
+      ctx.shadowColor = '#00ddff';
+      ctx.shadowBlur = 35;
+      ctx.beginPath();
+      ctx.arc(1580, 750, orbRadius + 15, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    } else if (t < 4.0) {
+      // 3. Beam Struggle Phase (2.0 to 4.0s)
+      const struggleProgress = (t - 2.0) / 2.0;
+
+      // Speed lines radiating outward
+      drawSpeedLines(ctx, 960, 750, 1.0, t * 25);
+
+      // Red firing beam at x=380
+      drawStickman(ctx, {
+        x: 380,
+        y: 840,
+        scale: 1.2,
+        color: '#ff3344',
+        lineWidth: 8,
+        eyeType: 'angry',
+        eyeDir: 1,
+        torsoAngle: 0.45, // leaning all in
+        headband: { color: '#ff2233', flutter: 40 },
+        leftArm: [1.5, 0.1], // both arms thrust forward
+        rightArm: [1.5, 0.1],
+        leftLeg: [0.8, -0.5],
+        rightLeg: [-0.8, 0.7],
+      });
+
+      // Blue firing beam at x=1540
+      drawStickman(ctx, {
+        x: 1540,
+        y: 840,
+        scale: 1.2,
+        color: '#00bbff',
+        lineWidth: 8,
+        eyeType: 'angry',
+        eyeDir: -1,
+        torsoAngle: -0.45,
+        scarf: { color: '#0099ee', flutter: 40 },
+        leftArm: [-1.5, 0.1],
+        rightArm: [-1.5, 0.1],
+        leftLeg: [-0.8, 0.5],
+        rightLeg: [0.8, -0.7],
+      });
+
+      // Clash Center oscillating back and forth with struggle
+      const clashCenterX = 960 + Math.sin(t * 18) * 80;
+      const clashCenterY = 750;
+
+      // Draw Red Beam (from x=450 to clashCenterX)
+      ctx.save();
+      const rBeamGrad = ctx.createLinearGradient(450, 750, clashCenterX, 750);
+      rBeamGrad.addColorStop(0, '#ff3300');
+      rBeamGrad.addColorStop(0.7, '#ffaa00');
+      rBeamGrad.addColorStop(1, '#ffffff');
+      ctx.strokeStyle = rBeamGrad;
+      ctx.lineWidth = 60 + Math.sin(t * 30) * 15;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(450, 750);
+      ctx.lineTo(clashCenterX, clashCenterY);
+      ctx.stroke();
+
+      // Inner white hot core
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 25;
+      ctx.stroke();
+      ctx.restore();
+
+      // Draw Blue Beam (from x=1470 to clashCenterX)
+      ctx.save();
+      const bBeamGrad = ctx.createLinearGradient(1470, 750, clashCenterX, 750);
+      bBeamGrad.addColorStop(0, '#0088ff');
+      bBeamGrad.addColorStop(0.7, '#00ffff');
+      bBeamGrad.addColorStop(1, '#ffffff');
+      ctx.strokeStyle = bBeamGrad;
+      ctx.lineWidth = 60 + Math.cos(t * 30) * 15;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(1470, 750);
+      ctx.lineTo(clashCenterX, clashCenterY);
+      ctx.stroke();
+
+      // Inner white hot core
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 25;
+      ctx.stroke();
+      ctx.restore();
+
+      // Giant Clash Vortex Sphere at Center
+      ctx.save();
+      const clashGrad = ctx.createRadialGradient(clashCenterX, clashCenterY, 20, clashCenterX, clashCenterY, 130);
+      clashGrad.addColorStop(0, '#ffffff');
+      clashGrad.addColorStop(0.4, '#ffffaa');
+      clashGrad.addColorStop(0.7, '#ff00aa');
+      clashGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = clashGrad;
+      ctx.beginPath();
+      ctx.arc(clashCenterX, clashCenterY, Math.max(1, 120 + Math.sin(t * 40) * 20), 0, Math.PI * 2);
+      ctx.fill();
+
+      // Radiating energy arcs
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 3;
+      for (let a = 0; a < 8; a++) {
+        const ang = (a / 8) * Math.PI * 2 + t * 15;
+        const rad = 130 + pseudoRandom(a + t * 20) * 50;
+        ctx.beginPath();
+        ctx.moveTo(clashCenterX, clashCenterY);
+        ctx.lineTo(clashCenterX + Math.cos(ang) * rad, clashCenterY + Math.sin(ang) * rad);
+        ctx.stroke();
+      }
+      ctx.restore();
+    } else {
+      // 4. Cataclysmic Explosion Phase (4.0 to 5.0s)
+      const expT = (t - 4.0) / 1.0;
+      const blastRadius = Math.max(0.1, expT * 1800);
+
+      // Expanding Shockwave rings
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.lineWidth = Math.max(0.1, 15 * (1.0 - expT));
+      ctx.beginPath();
+      ctx.arc(960, 750, Math.max(0.1, blastRadius * 0.8), 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.strokeStyle = 'rgba(255, 120, 0, 0.8)';
+      ctx.lineWidth = Math.max(0.1, 25 * (1.0 - expT));
+      ctx.beginPath();
+      ctx.arc(960, 750, Math.max(0.1, blastRadius * 0.5), 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+
+      // Blinding white flash fading to orange/smoke
+      ctx.save();
+      const flashAlpha = Math.max(0, 1.0 - expT * 1.4);
+      ctx.fillStyle = `rgba(255, 255, 255, ${flashAlpha})`;
+      ctx.fillRect(0, 0, 1920, 1080);
+
+      // Billowing smoke particles
+      ctx.fillStyle = 'rgba(120, 80, 100, 0.6)';
+      for (let s = 0; s < 30; s++) {
+        const sDist = pseudoRandom(s) * blastRadius * 0.6;
+        const sAng = pseudoRandom(s + 5) * Math.PI * 2;
+        const sx = 960 + Math.cos(sAng) * sDist;
+        const sy = 750 + Math.sin(sAng) * sDist;
+        ctx.beginPath();
+        ctx.arc(sx, sy, Math.max(0.1, 30 + pseudoRandom(s + 10) * 80 * expT), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    ctx.restore();
+  }
+};
+</script>
+</body>
+</html>

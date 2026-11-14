@@ -1,0 +1,325 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { margin: 0; overflow: hidden; background: #000; }
+    canvas { display: block; width: 1920px; height: 1080px; }
+  </style>
+</head>
+<body>
+<canvas id="c" width="1920" height="1080"></canvas>
+<script type="module">
+import {
+  clamp, lerp, easeOut, easeInOut, easeElastic,
+  drawStickman, drawHeart, pseudoRandom
+} from './common.js';
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+window.film = {
+  duration: 5.0,
+  frame(t) {
+    ctx.clearRect(0, 0, 1920, 1080);
+
+    // 1. Sunset Sky Gradient
+    const sky = ctx.createLinearGradient(0, 0, 0, 850);
+    sky.addColorStop(0.0, '#1c1032');
+    sky.addColorStop(0.35, '#5c1d4e');
+    sky.addColorStop(0.7, '#c44536');
+    sky.addColorStop(1.0, '#f28e2b');
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, 1920, 1080);
+
+    // 2. Setting Sun
+    ctx.save();
+    const sunGrad = ctx.createRadialGradient(1250, 580, 20, 1250, 580, 240);
+    sunGrad.addColorStop(0, 'rgba(255, 245, 200, 0.9)');
+    sunGrad.addColorStop(0.4, 'rgba(255, 170, 80, 0.4)');
+    sunGrad.addColorStop(1, 'rgba(255, 120, 50, 0)');
+    ctx.fillStyle = sunGrad;
+    ctx.beginPath();
+    ctx.arc(1250, 580, 240, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // 3. Distant Rolling Hills
+    ctx.fillStyle = '#2d142c';
+    ctx.beginPath();
+    ctx.moveTo(0, 850);
+    ctx.bezierCurveTo(400, 780, 800, 840, 1200, 770);
+    ctx.bezierCurveTo(1500, 720, 1750, 790, 1920, 750);
+    ctx.lineTo(1920, 1080);
+    ctx.lineTo(0, 1080);
+    ctx.closePath();
+    ctx.fill();
+
+    // Foreground Ground
+    ctx.fillStyle = '#170c1f';
+    ctx.fillRect(0, 840, 1920, 240);
+    ctx.fillStyle = '#21102b';
+    ctx.fillRect(0, 840, 1920, 8); // ground edge highlight
+
+    // 4. Cherry Blossom Tree on right
+    ctx.save();
+    ctx.strokeStyle = '#120817';
+    ctx.lineWidth = 36;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(1720, 840);
+    ctx.bezierCurveTo(1680, 650, 1780, 500, 1650, 320);
+    ctx.stroke();
+    // Branches
+    ctx.lineWidth = 18;
+    ctx.beginPath();
+    ctx.moveTo(1690, 520);
+    ctx.bezierCurveTo(1580, 480, 1480, 450, 1420, 420);
+    ctx.moveTo(1650, 320);
+    ctx.bezierCurveTo(1550, 260, 1450, 280, 1380, 250);
+    ctx.stroke();
+
+    // Blossom Clusters (pink clouds)
+    const blossoms = [
+      { x: 1420, y: 400, r: 70 },
+      { x: 1520, y: 340, r: 85 },
+      { x: 1650, y: 270, r: 95 },
+      { x: 1780, y: 320, r: 80 },
+      { x: 1360, y: 260, r: 60 }
+    ];
+    for (const b of blossoms) {
+      const bgGrad = ctx.createRadialGradient(b.x, b.y, 10, b.x, b.y, b.r);
+      bgGrad.addColorStop(0, '#ff9ebb');
+      bgGrad.addColorStop(0.7, '#ff6584');
+      bgGrad.addColorStop(1, 'rgba(255, 101, 132, 0)');
+      ctx.fillStyle = bgGrad;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Falling Sakura Petals (deterministic based on t)
+    for (let i = 0; i < 30; i++) {
+      const seed = i * 43.17;
+      const speedX = 40 + pseudoRandom(seed) * 60;
+      const speedY = 50 + pseudoRandom(seed + 1) * 40;
+      const startX = 1300 + pseudoRandom(seed + 2) * 500;
+      const startY = 150 + pseudoRandom(seed + 3) * 200;
+      const px = (startX - (t * speedX)) % 1920;
+      const py = (startY + (t * speedY)) % 900;
+      const rot = t * 2 + seed;
+
+      ctx.save();
+      ctx.translate(px, py);
+      ctx.rotate(rot);
+      ctx.fillStyle = '#ffaec0';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 7, 3.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.restore();
+
+    // 5. The Stickwoman (Waiting at right)
+    const sway = Math.sin(t * 3) * 0.04;
+    drawStickman(ctx, {
+      x: 1420,
+      y: 840,
+      scale: 1.0,
+      color: '#ffffff',
+      lineWidth: 7,
+      eyeType: t < 3.8 ? 'happy' : 'shock',
+      eyeDir: -1,
+      headTilt: sway,
+      torsoAngle: sway * 0.5,
+      hairBow: { color: '#ff3377' },
+      skirt: { color: '#ff66aa' },
+      leftArm: [0.3, -0.6],
+      rightArm: [-0.2, 0.4],
+      leftLeg: [-0.05, 0.05],
+      rightLeg: [0.05, -0.05],
+    });
+
+    // 6. Red Stickman Entrance & Proposal
+    let redX = -100;
+    let redEye = 'normal';
+    let redItem = null;
+    let redTorso = 0;
+    let redLArm = [0.4, -0.4];
+    let redRArm = [-0.4, 0.4];
+    let redLLeg = [0, 0];
+    let redRLeg = [0, 0];
+    let redY = 840;
+
+    if (t < 2.0) {
+      // Walking in with swagger
+      const walkProgress = t / 2.0;
+      redX = lerp(-100, 680, easeOut(walkProgress));
+      const walkCycle = t * 10;
+      redLLeg = [Math.sin(walkCycle) * 0.6, Math.max(0, -Math.sin(walkCycle)) * 0.6];
+      redRLeg = [-Math.sin(walkCycle) * 0.6, Math.max(0, Math.sin(walkCycle)) * 0.6];
+      redLArm = [-Math.sin(walkCycle) * 0.5, 0.3];
+      redRArm = [Math.sin(walkCycle) * 0.5, -0.3];
+      redTorso = 0.05;
+      redItem = { type: 'rose' };
+    } else if (t < 3.8) {
+      // Kneeling down with rose
+      redX = 680;
+      redY = 865;
+      redTorso = 0.2;
+      redLLeg = [-1.2, 1.4]; // kneeling back leg
+      redRLeg = [0.4, 1.2];  // kneeling front leg
+      redLArm = [1.2, -0.4]; // offering rose forward
+      redRArm = [-0.3, 0.6];
+      redItem = { type: 'rose' };
+      redEye = 'love';
+      // Pop hearts
+      const heartT = (t - 2.0) / 1.8;
+      ctx.fillStyle = '#ff2255';
+      drawHeart(ctx, 740, 720 - heartT * 60, 14 * Math.min(1.0, heartT * 3));
+    } else {
+      // Stares at Blue
+      redX = 680;
+      redY = 840;
+      redTorso = -0.15;
+      redLLeg = [-0.3, 0.2];
+      redRLeg = [0.3, 0.4];
+      redLArm = [0.8, -0.6];
+      redRArm = [-0.5, 0.7];
+      redItem = { type: 'rose' };
+      redEye = 'angry';
+    }
+
+    drawStickman(ctx, {
+      x: redX,
+      y: redY,
+      scale: 1.0,
+      color: '#ff3344',
+      lineWidth: 8,
+      eyeType: redEye,
+      eyeDir: 1,
+      torsoAngle: redTorso,
+      headband: { color: '#ff2233', flutter: Math.sin(t * 12) * 8 },
+      leftArm: redLArm,
+      rightArm: redRArm,
+      leftLeg: redLLeg,
+      rightLeg: redRLeg,
+      heldItemLeft: redItem,
+    });
+
+    // 7. Blue Stickman Entrance & Proposal
+    let blueX = 2100;
+    let blueY = 200;
+    let blueEye = 'normal';
+    let blueItem = null;
+    let blueLArm = [-0.3, 0.3];
+    let blueRArm = [0.3, -0.3];
+    let blueLLeg = [0, 0];
+    let blueRLeg = [0, 0];
+    let blueTorso = 0;
+
+    if (t >= 2.2 && t < 3.0) {
+      // Leaps in through air
+      const leapT = (t - 2.2) / 0.8;
+      blueX = lerp(1600, 1050, easeOut(leapT));
+      blueY = lerp(200, 840, leapT * leapT);
+      blueLLeg = [0.6, 0.8];
+      blueRLeg = [-0.6, 0.8];
+      blueLArm = [-1.0, 0.8];
+      blueRArm = [1.0, 0.8];
+    } else if (t >= 3.0 && t < 3.8) {
+      // Lands and presents diamond ring
+      blueX = 1050;
+      blueY = 840;
+      blueEye = 'happy';
+      blueTorso = -0.1;
+      blueLLeg = [0.2, -0.2];
+      blueRLeg = [-0.3, 0.3];
+      blueLArm = [-1.1, 0.4]; // holding ring high
+      blueRArm = [0.4, 0.4];
+      blueItem = { type: 'ring' };
+      // Sparkle around diamond
+      const sparkT = (t - 3.0) / 0.8;
+      const sparkR = Math.max(0.1, Math.abs(6 * Math.sin(sparkT * Math.PI * 4)));
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(990, 730, sparkR, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (t >= 3.8) {
+      // Confronts Red
+      blueX = 1050;
+      blueY = 840;
+      blueEye = 'angry';
+      blueTorso = 0.15;
+      blueLLeg = [0.3, 0.2];
+      blueRLeg = [-0.3, 0.4];
+      blueLArm = [-0.8, 0.6];
+      blueRArm = [0.7, -0.5];
+      blueItem = { type: 'ring' };
+    }
+
+    if (t >= 2.2) {
+      drawStickman(ctx, {
+        x: blueX,
+        y: blueY,
+        scale: 1.0,
+        color: '#00bbff',
+        lineWidth: 8,
+        eyeType: blueEye,
+        eyeDir: -1,
+        torsoAngle: blueTorso,
+        scarf: { color: '#0099ee', flutter: Math.sin(t * 14) * 8 },
+        leftArm: blueLArm,
+        rightArm: blueRArm,
+        leftLeg: blueLLeg,
+        rightLeg: blueRLeg,
+        heldItemLeft: blueItem,
+      });
+    }
+
+    // 8. Staredown Sparks (t >= 3.8)
+    if (t >= 3.8) {
+      const sparkProgress = (t - 3.8) / 1.2;
+      ctx.save();
+      ctx.strokeStyle = '#ffff00';
+      ctx.lineWidth = 3;
+      ctx.shadowColor = '#ffff00';
+      ctx.shadowBlur = 10;
+      // Electric bolt between eyes (x: 720 to 1010, y: 760)
+      ctx.beginPath();
+      ctx.moveTo(720, 760);
+      const segments = 6;
+      for (let s = 1; s < segments; s++) {
+        const sx = lerp(720, 1010, s / segments);
+        const sy = 760 + (pseudoRandom(s + t * 40) - 0.5) * 35;
+        ctx.lineTo(sx, sy);
+      }
+      ctx.lineTo(1010, 760);
+      ctx.stroke();
+      ctx.restore();
+
+      // Title Banner drop
+      const bannerT = clamp((t - 4.0) / 0.7, 0, 1);
+      if (bannerT > 0) {
+        ctx.save();
+        const bannerY = lerp(-150, 180, easeElastic(bannerT));
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+        ctx.fillRect(0, bannerY - 60, 1920, 120);
+        ctx.fillStyle = '#ffcc00';
+        ctx.font = '900 68px Impact, Arial Black, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.shadowColor = '#ff3344';
+        ctx.shadowBlur = 20;
+        ctx.fillText('THE DUEL FOR HER HEART', 960, bannerY + 15);
+        ctx.font = '700 28px Arial, sans-serif';
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowBlur = 0;
+        ctx.fillText('RED VS BLUE', 960, bannerY + 50);
+        ctx.restore();
+      }
+    }
+  }
+};
+</script>
+</body>
+</html>
